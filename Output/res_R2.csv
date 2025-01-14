@@ -1,0 +1,11 @@
+,Model,Use Chain,R2 Score
+0,ElasticNet,x,0.9678067767124833
+1,ElasticNet,o,0.9686951196832647
+2,LinearRegression,x,0.9700120323496995
+3,LinearRegression,o,0.9700120323496992
+4,BayesianRidge,x,0.9636816122678928
+5,BayesianRidge,o,0.9618291333142324
+6,DecisionTreeRegressor,x,0.6691411483829351
+7,DecisionTreeRegressor,o,0.7552534432948024
+8,GradientBoostingRegressor,x,0.631784960658979
+9,GradientBoostingRegressor,o,0.8360668744424744
