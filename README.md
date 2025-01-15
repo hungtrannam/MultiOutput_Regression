@@ -1,4 +1,4 @@
-# Multi Output Regression
+# Model Optimization with and without Chaining
 
 This repository provides a Python-based implementation for optimizing machine learning models using different strategies, including Regressor Chains and MultiOutputRegressors. The implementation supports various regression models and includes functionalities for SHAP analysis and prediction visualization.
 
@@ -83,10 +83,18 @@ The final evaluation results, including R2 scores for each model and optimizatio
 
 | Model                   | Use Chain | R2 Score |
 |-------------------------|-----------|----------|
-| ElasticNet              | x         | 0.85     |
-| ElasticNet              | o         | 0.83     |
-| GradientBoostingRegressor | x         | 0.90     |
-| GradientBoostingRegressor | o         | 0.88     |
+| ElasticNet              | x         | 0.9678   |
+| ElasticNet              | o         | 0.9687   |
+| LinearRegression        | x         | 0.9700   |
+| LinearRegression        | o         | 0.9700   |
+| BayesianRidge           | x         | 0.9637   |
+| BayesianRidge           | o         | 0.9618   |
+| DecisionTreeRegressor   | x         | 0.6691   |
+| DecisionTreeRegressor   | o         | 0.7553   |
+| GradientBoostingRegressor | x         | 0.6318   |
+| GradientBoostingRegressor | o         | 0.8361   |
+
+This table highlights the performance of various models with and without using chaining techniques.
 
 ## Contributing
 Contributions are welcome! Feel free to submit issues or pull requests to improve the code or documentation.
