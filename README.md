@@ -53,7 +53,9 @@ Run the script using the following arguments:
 
 #### Example
 ```bash
-python script.py --file-path data/ex.txt --models ElasticNet SVR
+python exp_main.py \
+--file-path ex.txt \
+--models ElasticNet LinearRegression BayesianRidge DecisionTreeRegressor GradientBoostingRegressor
 ```
 
 ### 3. Output
