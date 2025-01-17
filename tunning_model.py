@@ -10,9 +10,11 @@ from sklearn.svm import SVR
 from sklearn.tree import DecisionTreeRegressor
 from sklearn.ensemble import GradientBoostingRegressor
 
+from data import add_uncertainty
+import numpy as np
 
 class ModelOptimizer:
-    def __init__(self, X, y, use_scaling=True, use_chain=False):
+    def __init__(self, X, y, use_scaling=True, use_chain=False, use_mc = False):
         """
         Class to manage the data and optimize the model.
 
@@ -22,12 +24,13 @@ class ModelOptimizer:
             use_scaling (bool): Whether to scale the data or not.
             use_chain (bool): Whether to use output chains (RegressorChain) or multi-output (MultiOutputRegressor).
         """
-        self.X = X
         self.y = y
         self.use_scaling = use_scaling
         self.use_chain = use_chain
+        self.use_mc = use_mc
+        self.X = X
 
-    def fit_flow(self, model_class, params):
+    def fit_flow_loov(self, model_class, params):
         """
         Objective function for Optuna to optimize hyperparameters of the model.
 
@@ -38,6 +41,8 @@ class ModelOptimizer:
         Returns:
             float: The average Mean Squared Error (MSE) for Leave-One-Out Validation.
         """
+        from joblib import Parallel, delayed
+
         # Create a pipeline for model training
         steps = []
         if self.use_scaling:
@@ -50,17 +55,61 @@ class ModelOptimizer:
         model = Pipeline(steps)
 
         # Perform Leave-One-Out Validation
+        
         loo = LeaveOneOut()
         errors = []
-        for train_idx, test_idx in loo.split(self.X):
+
+        def train_and_evaluate(train_idx, test_idx):
             X_train, X_test = self.X.iloc[train_idx], self.X.iloc[test_idx]
             y_train, y_test = self.y.iloc[train_idx], self.y.iloc[test_idx]
+            model.fit(X_train, y_train)
+            y_pred = model.predict(X_test)
+            return mean_squared_error(y_test, y_pred)
 
-            model.fit(X_train, y_train)     # Train model on training data
-            y_pred = model.predict(X_test)  # Predict on test data
-            errors.append(mean_squared_error(y_test, y_pred))  # Compute the MSE for the prediction
-
+        errors = Parallel(n_jobs=-1)(delayed(train_and_evaluate)(train_idx, test_idx) for train_idx, test_idx in loo.split(self.X))
         return sum(errors) / len(errors)
+
+    def fit_flow_mc(self, model_class, params, num_simulations=30):
+        """
+        Perform Monte Carlo simulations for Leave-One-Out Validation.
+
+        Parameters:
+            model_class (class): The model class to be optimized.
+            params (dict): Dictionary containing the hyperparameters of the model.
+            num_simulations (int): Number of Monte Carlo simulations.
+
+        Returns:
+            float: The average Mean Squared Error (MSE) for Monte Carlo simulations.
+        """
+        from joblib import Parallel, delayed
+
+        steps = []
+        if self.use_scaling:
+            steps.append(('scaler', StandardScaler()))
+        if self.use_chain:
+            steps.append(('model', RegressorChain(model_class(**params))))
+        else:
+            steps.append(('model', MultiOutputRegressor(model_class(**params))))
+
+        model = Pipeline(steps)
+
+        def simulate_once():
+            loo = LeaveOneOut()
+            errors = []
+            for train_idx, test_idx in loo.split(self.X):
+                X_train, X_test = self.X.iloc[train_idx], self.X.iloc[test_idx]
+                y_train, y_test = self.y.iloc[train_idx], self.y.iloc[test_idx]
+
+                model.fit(X_train, y_train)
+                y_pred = model.predict(X_test)
+                errors.append(mean_squared_error(y_test, y_pred))
+            return sum(errors) / len(errors)
+
+        # Run simulations in parallel
+        results = Parallel(n_jobs=-1)(delayed(simulate_once)() for _ in range(num_simulations))
+        return sum(results) / len(results)
+
+
 
     def objective(self, trial, model):
         """
@@ -120,7 +169,10 @@ class ModelOptimizer:
             raise ValueError(f"Model {model} not supported")  # Raise an error if an unsupported model is provided
 
         # Return the Mean Squared Error
-        return self.fit_flow(model, params)
+        if self.use_mc:
+            return self.fit_flow_mc(model, params)
+        else:
+            return self.fit_flow_loov(model, params)
 
     def optimize_model(self, model, n_trials=50):
         """

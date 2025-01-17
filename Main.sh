@@ -1,14 +1,18 @@
-# ElasticNet
-# SVR
-# DecisionTreeRegressor
-# LinearRegression
-# BayesianRidge
-# GradientBoostingRegressor
+# "ElasticNet" "DecisionTreeRegressor" "LinearRegression" "BayesianRidge" "GradientBoostingRegressor"
 
+#!/bin/bash
 
+# Define variables
+FILE_PATH="ex.txt"  # Replace with your actual data file path
+MODELS=("ElasticNet" "LinearRegression" "BayesianRidge")
+NOISE_LEVEL=2
 
-# python exp_main.py --file-path ex.txt --models ElasticNet LinearRegression BayesianRidge DecisionTreeRegressor
-
+# Run Python script for all models
+echo "Running model comparison..."
 python exp_main.py \
---file-path ex.txt \
---models ElasticNet LinearRegression BayesianRidge DecisionTreeRegressor GradientBoostingRegressor
+  --file-path "$FILE_PATH" \
+  --models "${MODELS[@]}" \
+  --noise-level $NOISE_LEVEL
+
+# Check results
+echo "Model comparison completed. Results saved in ./Output/results_comparison.csv."

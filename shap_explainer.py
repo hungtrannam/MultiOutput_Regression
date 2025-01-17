@@ -1,6 +1,8 @@
 import shap
 import matplotlib.pyplot as plt
 import os
+import optuna.visualization as vis
+from sklearn.metrics import r2_score
 
 # Bar plot of feature importance
 def shap_bar_plot(best_model, X_sample, feature_names=None, save_path="Figs/shap_plot.png"):
@@ -18,9 +20,7 @@ def shap_bar_plot(best_model, X_sample, feature_names=None, save_path="Figs/shap
     plt.savefig(save_path, dpi=150, bbox_inches='tight')
     plt.close()
 
-import os
-import matplotlib.pyplot as plt
-from sklearn.metrics import r2_score
+
 
 def plot_predictions(best_model, X, y, num_outputs=4, save_path="Figs/Prediction_plot.png"):
     print("\nPredict vs. Reality:")
@@ -58,3 +58,10 @@ def plot_predictions(best_model, X, y, num_outputs=4, save_path="Figs/Prediction
     plt.close()
 
 
+
+def visualize_optuna_results(study):
+    # Hyperparameter importance
+    vis.plot_param_importances(study).show()
+
+    # Optimization history
+    vis.plot_optimization_history(study).show()
