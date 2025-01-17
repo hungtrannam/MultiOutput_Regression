@@ -5,6 +5,6 @@ git push -u origin main
 
 
 git add .
-git commit -m "convert py"
+git commit -m "update: $(date '+%Y-%m-%d %H:%M:%S')"
 git push
 
