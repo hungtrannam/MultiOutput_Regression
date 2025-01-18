@@ -5,6 +5,6 @@ git push -u origin main
 
 
 git add .
-git commit -m "update: $(date '+%d-%m-$Y %H:%M:%S')"
+git commit -m "update: $(date '+%d-%m-%Y %H:%M:%S')"
 git push
 
