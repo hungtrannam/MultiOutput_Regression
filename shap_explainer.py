@@ -17,8 +17,33 @@ def shap_bar_plot(best_model, X_sample, feature_names=None, save_path="Figs/shap
     shap_values = explainer.shap_values(X_sample)
     
     shap.summary_plot(shap_values, X_sample, feature_names=feature_names, plot_type="bar",show=False)
-    plt.savefig(save_path, dpi=150, bbox_inches='tight')
+    plt.savefig(save_path, dpi=300, bbox_inches='tight')
     plt.close()
+
+def shap_summary_plot(best_model, X_sample, feature_names=None, save_path="Figs/shap_summary_plot.png"):
+    """
+    Vẽ SHAP summary plot cho tất cả các biến.
+    """
+    print("\nGenerating SHAP Summary Plot...")
+    
+    # Tạo thư mục nếu chưa tồn tại
+    os.makedirs(os.path.dirname(save_path), exist_ok=True)
+    
+    # Lấy estimator đầu tiên (nếu là ensemble model)
+    estimator = best_model.estimators_[0]
+    
+    # Tạo SHAP explainer
+    explainer = shap.KernelExplainer(estimator.predict, X_sample)
+    shap_values = explainer.shap_values(X_sample)
+    
+    # Vẽ SHAP Summary Plot
+    shap.summary_plot(shap_values, X_sample, feature_names=feature_names, show=False)
+    
+    # Lưu biểu đồ
+    plt.savefig(save_path, dpi=300, bbox_inches='tight')
+    plt.close()
+    print(f"SHAP summary plot saved to {save_path}")
+
 
 
 
@@ -54,14 +79,7 @@ def plot_predictions(best_model, X, y, num_outputs=4, save_path="Figs/Prediction
         ax_res.grid(True)
     
     plt.tight_layout()
-    plt.savefig(save_path, dpi=150, bbox_inches="tight")
+    plt.savefig(save_path, dpi=300, bbox_inches="tight")
     plt.close()
 
 
-
-def visualize_optuna_results(study):
-    # Hyperparameter importance
-    vis.plot_param_importances(study).show()
-
-    # Optimization history
-    vis.plot_optimization_history(study).show()
