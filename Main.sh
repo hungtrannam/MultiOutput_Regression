@@ -2,11 +2,12 @@
 
 # Define variables
 #
-# "ElasticNet" "LinearRegression" "BayesianRidge" "DecisionTreeRegressor" "GradientBoostingRegressor"
+# "ElasticNet" "LinearRegression" "BayesianRidge" "DecisionTreeRegressor" "GradientBoostingRegressor" 'LGBMRegressor'
+# XGBRegressor RandomForestRegressor
 FILE_PATH="ex.txt" 
-MODELS=("BayesianRidge" "LinearRegression" "ElasticNet")
-NOISE_LEVEL=0.1
-NUM_SAMPLE=300
+MODELS=("ElasticNet" "BayesianRidge" "RandomForestRegressor")
+NOISE_LEVEL=0.01
+NUM_SAMPLE=500
 
 # Run Python script for all models
 echo "Running model comparison..."

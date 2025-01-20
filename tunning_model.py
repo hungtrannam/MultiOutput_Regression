@@ -6,8 +6,12 @@ from sklearn.metrics import mean_squared_error, r2_score
 import optuna
 
 from sklearn.linear_model import ElasticNet, BayesianRidge, LinearRegression
+from xgboost import XGBRegressor
+from lightgbm import LGBMRegressor
+from pytorch_tabnet.tab_model import TabNetRegressor
 from sklearn.svm import SVR
 from sklearn.tree import DecisionTreeRegressor
+from sklearn.ensemble import RandomForestRegressor
 from sklearn.ensemble import GradientBoostingRegressor
 
 import numpy as np
@@ -54,16 +58,16 @@ class ModelOptimizer:
         self.noise_level_y = noise_level_y
 
         self.X_train, self.X_test, self.y_train, self.y_test = train_test_split(
-            self.X_original, self.y_original, test_size=0.01
+            self.X_original, self.y_original, test_size=0.3
         )
 
         self.X_mc, self.y_mc = generate_mc_data(
-            self.X_train, self.y_train, self.num_samples, self.noise_level_X, self.noise_level_y
+            self.X_original, self.y_original, self.num_samples, self.noise_level_X, self.noise_level_y
         )
 
 
         
-    def fit_flow_loocv(self, model_class, params):
+    def fit_flow(self, model_class, params):
         """
         Perform Leave-One-Out Cross-Validation (LOOCV) to optimize model hyperparameters with parallelization.
 
@@ -84,24 +88,25 @@ class ModelOptimizer:
             steps.append(('model', MultiOutputRegressor(model_class(**params))))  # Use MultiOutputRegressor
 
         model = Pipeline(steps)
-        # loo = LeaveOneOut()  # Leave-One-Out Cross-Validation
 
-        kf = KFold(n_splits=30, shuffle=True)  # K-Fold Cross-Validation
+        # loo = LeaveOneOut()  # Leave-One-Out Cross-Validation
+        kf = KFold(n_splits=5, shuffle=True)  # K-Fold Cross-Validation
 
         def train_and_evaluate(train_idx, val_idx):
             """Train and evaluate the model on a single K-Fold split."""
-            X_train, X_val = self.X_mc.iloc[train_idx], self.X_mc.iloc[val_idx]
-            y_train, y_val = self.y_mc.iloc[train_idx], self.y_mc.iloc[val_idx]
-            model.fit(X_train, y_train)
-            y_pred = model.predict(X_val)
-            return r2_score(y_val, y_pred)
+            X_train_fold, y_train_fold = self.X_mc.iloc[train_idx], self.y_mc.iloc[train_idx]
+            model.fit(X_train_fold, y_train_fold)
+            
+            X_val_fold, y_val_fold = self.X_mc.iloc[val_idx], self.y_mc.iloc[val_idx]
+            y_pred = model.predict(X_val_fold)
+            return mean_squared_error(y_val_fold, y_pred)
 
         # Use joblib for parallel processing
         scores = Parallel(n_jobs=-1)(
             delayed(train_and_evaluate)(train_idx, val_idx) for train_idx, val_idx in kf.split(self.X_mc)
         )
 
-        return -np.mean(scores)
+        return np.mean(scores)
     
 
     def objective(self, trial, model):
@@ -151,10 +156,42 @@ class ModelOptimizer:
                 'learning_rate': trial.suggest_float('learning_rate', 1e-4, 1e-2),
                 'max_features': trial.suggest_int('max_features', 1, self.X_mc.shape[1]),
             }
+        elif model == XGBRegressor:
+            params = {
+                'n_estimators': trial.suggest_int('n_estimators', 50, 200),
+                'max_depth': trial.suggest_int('max_depth', 3, 50),
+                'learning_rate': trial.suggest_float('learning_rate', 0.01, 0.3),
+                'gamma': trial.suggest_float('gamma', 0, 5),
+                'reg_alpha': trial.suggest_float('reg_alpha', 1e-5, 10, log=True),
+                'reg_lambda': trial.suggest_float('reg_lambda', 1e-5, 10, log=True),
+            }
+        elif model == RandomForestRegressor:
+            params = {
+                'n_estimators': trial.suggest_int('n_estimators', 50, 200),
+                'max_depth': trial.suggest_int('max_depth', 3, 30),
+                'min_samples_split': trial.suggest_int('min_samples_split', 2, 20),
+                'min_samples_leaf': trial.suggest_int('min_samples_leaf', 1, 20),
+            }   
+        elif model == TabNetRegressor:
+            params = {
+                'n_d': trial.suggest_int('n_d', 8, 64),  # Feature transformer output dimension
+                'n_a': trial.suggest_int('n_a', 8, 64),  # Attention dimension
+                'n_steps': trial.suggest_int('n_steps', 3, 10),
+                'gamma': trial.suggest_float('gamma', 1.0, 2.0),
+                'lambda_sparse': trial.suggest_float('lambda_sparse', 1e-5, 1e-1),
+                'momentum': trial.suggest_float('momentum', 0.01, 0.4),
+            }
+        elif model == LGBMRegressor:
+            params = {
+                'n_estimators': trial.suggest_int('n_estimators', 50, 500),
+                'num_leaves': trial.suggest_int('num_leaves', 20, 300),
+                'learning_rate': trial.suggest_float('learning_rate', 1e-3, 0.3),
+                'max_depth': trial.suggest_int('max_depth', -1, 15),
+            }
         else:
             raise ValueError(f"Model {model} not supported")
 
-        return self.fit_flow_loocv(model, params)
+        return self.fit_flow(model, params)
 
     def optimize_model(self, model, n_trials=30):
         """
@@ -184,6 +221,6 @@ class ModelOptimizer:
         else:
             best_model = MultiOutputRegressor(model(**best_params))
 
-        best_model.fit(self.X_train, self.y_train)
+        best_model.fit(self.X_mc, self.y_mc)
         return best_model
 

@@ -2,10 +2,16 @@ import argparse
 import os
 import pandas as pd
 from sklearn.metrics import r2_score, mean_squared_error
-from sklearn.linear_model import ElasticNet, LinearRegression, BayesianRidge
+
+from sklearn.linear_model import ElasticNet, BayesianRidge, LinearRegression
+from xgboost import XGBRegressor
+from lightgbm import LGBMRegressor
+from pytorch_tabnet.tab_model import TabNetRegressor
 from sklearn.svm import SVR
 from sklearn.tree import DecisionTreeRegressor
+from sklearn.ensemble import RandomForestRegressor
 from sklearn.ensemble import GradientBoostingRegressor
+
 from data import process_data
 from tunning_model import ModelOptimizer
 from shap_explainer import shap_bar_plot, plot_predictions, shap_summary_plot
@@ -28,7 +34,11 @@ def parse_args():
     )
     parser.add_argument(
         '--models', type=str, nargs='+', 
-        choices=['ElasticNet', 'SVR', 'DecisionTreeRegressor', 'LinearRegression', 'BayesianRidge', 'GradientBoostingRegressor'],
+        choices=['ElasticNet', 'SVR', 
+                 'DecisionTreeRegressor', 'LinearRegression', 
+                 'BayesianRidge', 'GradientBoostingRegressor',
+                 'XGBRegressor', 'RandomForestRegressor',
+                 'TabNetRegressor', 'LGBMRegressor'],
         help="List of models to optimize."
     )
     parser.add_argument(
@@ -65,7 +75,11 @@ def main():
         'DecisionTreeRegressor': DecisionTreeRegressor,
         'LinearRegression': LinearRegression,
         'BayesianRidge': BayesianRidge,
-        'GradientBoostingRegressor': GradientBoostingRegressor
+        'GradientBoostingRegressor': GradientBoostingRegressor,
+        'XGBRegressor': XGBRegressor,
+        'RandomForestRegressor':RandomForestRegressor,
+        'TabNetRegressor':TabNetRegressor,
+        'LGBMRegressor':LGBMRegressor,
     }
 
     models = []  # List to hold model configurations
