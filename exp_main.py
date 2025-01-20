@@ -14,7 +14,7 @@ from sklearn.ensemble import GradientBoostingRegressor
 
 from data import process_data
 from tunning_model import ModelOptimizer
-from shap_explainer import shap_bar_plot, plot_predictions, shap_summary_plot
+from shap_explainer import shap_bar_plot, plot_predictions, shap_summary_plot, plot_permutation_importance
 from optuna.visualization import (
                 plot_optimization_history,
                 plot_param_importances,
@@ -130,33 +130,41 @@ def main():
                 optimized_model, 
                 tuner.X_test, 
                 feature_names=tuner.X_test.columns.tolist(), 
-                save_path=f"Figs/SHAP_{model_class.__name__}_Chain_{use_chain}.png"
+                save_path=f"Figs/{model_class.__name__}_SHAP_Chain_{use_chain}.png"
             )
 
             shap_summary_plot(
                 optimized_model,
                 tuner.X_test,
                 feature_names = tuner.X_test.columns.tolist(),
-                save_path=f"Figs/SHAP_summary_{model_class.__name__}_Chain_{use_chain}.png"
+                save_path=f"Figs/{model_class.__name__}_SHAPsum_Chain_{use_chain}.png"
             )
             plot_predictions(
                 optimized_model, 
                 tuner.X_test, tuner.y_test, 
                 num_outputs=4, 
-                save_path=f"Figs/Prediction_{model_class.__name__}_Chain_{use_chain}.png"
+                save_path=f"Figs/{model_class.__name__}_Prediction_Chain_{use_chain}.png"
             )
+
+            plot_permutation_importance(
+                optimized_model, 
+                tuner.X_test, tuner.y_test, 
+                save_path=f"Figs/{model_class.__name__}_PI_Chain_{use_chain}.png")
+            
 
             # Step 5.2 Generate Optuna visualization plots
             fig_opt_history = plot_optimization_history(tuner.study)
-            fig_opt_history.write_image(f"Figs/OptHistory_{model_class.__name__}_Chain_{use_chain}.png")
+            fig_opt_history.write_image(f"Figs/{model_class.__name__}_OptHistory_Chain_{use_chain}.png")
 
             # Plot parameter importances
             fig_param_importance = plot_param_importances(tuner.study)
-            fig_param_importance.write_image(f"Figs/ParamImportance_{model_class.__name__}_Chain_{use_chain}.png")
+            fig_param_importance.write_image(f"Figs/{model_class.__name__}_ParamImportance_Chain_{use_chain}.png")
 
             # # Plot parallel coordinate plot
             # fig_parallel_coordinate = plot_parallel_coordinate(tuner.study)
             # fig_parallel_coordinate.write_image(f"Figs/ParallelCoordinate_{model_class.__name__}_Chain_{use_chain}.png")
+
+
 
     # Step 6: Save results to CSV
     results_df = pd.DataFrame(results)

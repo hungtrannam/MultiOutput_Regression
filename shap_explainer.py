@@ -82,4 +82,25 @@ def plot_predictions(best_model, X, y, num_outputs=4, save_path="Figs/Prediction
     plt.savefig(save_path, dpi=300, bbox_inches="tight")
     plt.close()
 
+from sklearn.inspection import permutation_importance
 
+def plot_permutation_importance(model, X, y, save_path):
+    perm_importance = permutation_importance(model, X, y, scoring='r2', n_repeats=10, random_state=42)
+    sorted_idx = perm_importance.importances_mean.argsort()
+
+    plt.figure(figsize=(10, 6))
+    plt.barh(X.columns[sorted_idx], perm_importance.importances_mean[sorted_idx])
+    plt.xlabel("Permutation Importance")
+    plt.tight_layout()
+    plt.savefig(save_path, dpi=300, bbox_inches="tight")
+    plt.close()
+
+def shap_waterfall_plot(model, X, feature_names, save_path):
+    explainer = shap.TreeExplainer(model)
+    shap_values = explainer.shap_values(X)
+    shap.waterfall_plot(
+        shap.Explanation(values=shap_values[0], base_values=explainer.expected_value[0], feature_names=feature_names)
+    )
+    plt.tight_layout()
+    plt.savefig(save_path, dpi=300, bbox_inches="tight")
+    plt.close()

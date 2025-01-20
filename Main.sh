@@ -2,10 +2,10 @@
 
 # Define variables
 #
-# "ElasticNet" "LinearRegression" "BayesianRidge" "DecisionTreeRegressor" "GradientBoostingRegressor" 'LGBMRegressor'
-# XGBRegressor RandomForestRegressor
+# "ElasticNet" "LinearRegression" "BayesianRidge" "DecisionTreeRegressor" "GradientBoostingRegressor" RandomForestRegressor
+# XGBRegressor 'LGBMRegressor' 
 FILE_PATH="ex.txt" 
-MODELS=("ElasticNet" "BayesianRidge" "RandomForestRegressor")
+MODELS=("ElasticNet" "BayesianRidge" "RandomForestRegressor" "LinearRegression" "GradientBoostingRegressor" "DecisionTreeRegressor")
 NOISE_LEVEL=0.01
 NUM_SAMPLE=500
 
