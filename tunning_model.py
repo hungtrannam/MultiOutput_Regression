@@ -1,226 +1,191 @@
 from sklearn.pipeline import Pipeline
 from sklearn.preprocessing import StandardScaler
-from sklearn.model_selection import LeaveOneOut, KFold
+from sklearn.model_selection import KFold, train_test_split
 from sklearn.multioutput import MultiOutputRegressor, RegressorChain
-from sklearn.metrics import mean_squared_error, r2_score
+from sklearn.metrics import mean_squared_error, r2_score, mean_absolute_error
 import optuna
 
-from sklearn.linear_model import ElasticNet, BayesianRidge, LinearRegression
+from sklearn.linear_model import ElasticNet, BayesianRidge
 from xgboost import XGBRegressor
-from lightgbm import LGBMRegressor
-from pytorch_tabnet.tab_model import TabNetRegressor
+from sklearn.ensemble import RandomForestRegressor, GradientBoostingRegressor
+from sklearn.neural_network import MLPRegressor
 from sklearn.svm import SVR
-from sklearn.tree import DecisionTreeRegressor
-from sklearn.ensemble import RandomForestRegressor
-from sklearn.ensemble import GradientBoostingRegressor
+
+
 
 import numpy as np
-import pandas as pd
 from joblib import Parallel, delayed
-
-from sklearn.model_selection import train_test_split
 from data import generate_mc_data
+import pandas as pd
+
 
 class ModelOptimizer:
-    """
-    A class for managing data and optimizing regression models using hyperparameter tuning.
-
-    Attributes:
-        X_original (pd.DataFrame): Original input data (features).
-        y_original (pd.DataFrame): Original output data (targets).
-        use_scaling (bool): Whether to scale the data before training.
-        use_chain (bool): Whether to use RegressorChain or MultiOutputRegressor.
-        num_samples (int): Number of Monte Carlo samples to generate.
-        noise_level_X (float): Noise level for input features.
-        noise_level_y (float): Noise level for output targets.
-        X (pd.DataFrame): Monte Carlo-generated input data.
-        y (pd.DataFrame): Monte Carlo-generated output data.
-    """
-    def __init__(self, X, y, use_scaling=True, use_chain=False, num_samples=100, noise_level_X=0.1, noise_level_y=0.1):
-        """
-        Initialize the ModelOptimizer with Monte Carlo data generation.
-
-        Parameters:
-            X (pd.DataFrame): Input data (features).
-            y (pd.DataFrame): Output data (targets).
-            use_scaling (bool): Whether to scale the data before training.
-            use_chain (bool): Whether to use RegressorChain or MultiOutputRegressor.
-            num_samples (int): Number of Monte Carlo samples to generate.
-            noise_level_X (float): Noise level for input features.
-            noise_level_y (float): Noise level for output targets.
-        """
-        self.X_original = X
-        self.y_original = y
+    def __init__(self, X, y, use_scaling=True, use_chain=False, num_samples=100, num_iterations = 100, noise_level_X=0.1, noise_level_y=0.1):
         self.use_scaling = use_scaling
         self.use_chain = use_chain
         self.num_samples = num_samples
         self.noise_level_X = noise_level_X
         self.noise_level_y = noise_level_y
+        self.num_iterations = num_iterations
 
         self.X_train, self.X_test, self.y_train, self.y_test = train_test_split(
-            self.X_original, self.y_original, test_size=0.3
-        )
-
-        self.X_mc, self.y_mc = generate_mc_data(
-            self.X_original, self.y_original, self.num_samples, self.noise_level_X, self.noise_level_y
+            X, y, test_size=0.2, random_state=2025
         )
 
 
-        
-    def fit_flow(self, model_class, params):
-        """
-        Perform Leave-One-Out Cross-Validation (LOOCV) to optimize model hyperparameters with parallelization.
+    def fit_flow_mccv(self, model_class, params, test_size=0.15):
+        def train_and_evaluate():
+            # Split the data randomly into train and validation sets
+            X_train_fold, X_val_fold, y_train_fold, y_val_fold = train_test_split(
+                self.X_train, self.y_train, test_size=test_size, random_state=np.random.randint(1e6)
+            )
 
-        Parameters:
-            model_class (class): The regression model class to optimize (e.g., ElasticNet, SVR).
-            params (dict): Hyperparameters of the model.
+            # Generate Monte Carlo augmented data
+            X_train_mc, y_train_mc = generate_mc_data(
+                X_train_fold, y_train_fold, self.num_samples, self.noise_level_X, self.noise_level_y
+            )
 
-        Returns:
-            float: The average Mean Squared Error (MSE) across all folds.
-        """
-        # Create a pipeline for model training
-        steps = []
-        if self.use_scaling:
-            steps.append(('scaler', StandardScaler()))  # Scale the data if required
-        if self.use_chain:
-            steps.append(('model', RegressorChain(model_class(**params))))  # Use RegressorChain
-        else:
-            steps.append(('model', MultiOutputRegressor(model_class(**params))))  # Use MultiOutputRegressor
+            if self.use_scaling:
+                scaler = StandardScaler().fit(X_train_mc)
+                X_train_mc = scaler.transform(X_train_mc)
+                X_val_fold = scaler.transform(X_val_fold)
 
-        model = Pipeline(steps)
+                # Convert back to DataFrame to retain feature names
+                X_train_mc = pd.DataFrame(X_train_mc, columns=self.X_train.columns)
+                X_val_fold = pd.DataFrame(X_val_fold, columns=self.X_train.columns)
 
-        # loo = LeaveOneOut()  # Leave-One-Out Cross-Validation
-        kf = KFold(n_splits=5, shuffle=True)  # K-Fold Cross-Validation
 
-        def train_and_evaluate(train_idx, val_idx):
-            """Train and evaluate the model on a single K-Fold split."""
-            X_train_fold, y_train_fold = self.X_mc.iloc[train_idx], self.y_mc.iloc[train_idx]
-            model.fit(X_train_fold, y_train_fold)
-            
-            X_val_fold, y_val_fold = self.X_mc.iloc[val_idx], self.y_mc.iloc[val_idx]
+            # Build the model pipeline
+            if model_class == XGBRegressor:
+                model = MultiOutputRegressor(XGBRegressor(**params))
+            else:
+                model = Pipeline([
+                    ('model', RegressorChain(model_class(**params)) if self.use_chain else MultiOutputRegressor(model_class(**params)))
+                ])
+
+
+            # Train the model and calculate MAE on the validation set
+            model.fit(X_train_mc, y_train_mc)
             y_pred = model.predict(X_val_fold)
-            return mean_squared_error(y_val_fold, y_pred)
+            
+            # Compute MAPE with epsilon to prevent division by zero
+            epsilon = 1e-6
+            mape = np.mean(np.abs((y_val_fold - y_pred) / (y_val_fold + epsilon))) * 100
+            return mape
 
-        # Use joblib for parallel processing
+        # Use Parallel to evaluate multiple MCCV iterations in parallel
         scores = Parallel(n_jobs=-1)(
-            delayed(train_and_evaluate)(train_idx, val_idx) for train_idx, val_idx in kf.split(self.X_mc)
+            delayed(train_and_evaluate)() for _ in range(self.num_iterations)
         )
 
         return np.mean(scores)
-    
 
     def objective(self, trial, model):
-        """
-        Define the hyperparameter search space and objective function for Optuna.
-
-        Parameters:
-            trial (optuna.trial.Trial): The current Optuna trial.
-            model (class): The regression model to optimize.
-
-        Returns:
-            float: The objective value (MSE) for the trial.
-        """
-        # Define hyperparameters based on the model type
-        if model == DecisionTreeRegressor:
+        if model == ElasticNet:
             params = {
-                'max_depth': trial.suggest_int('max_depth', 3, 50),
-                'min_samples_split': trial.suggest_int('min_samples_split', 3, 50),
-                'max_features': trial.suggest_int('max_features', 1, self.X_mc.shape[1]),
-            }
-        elif model == SVR:
-            params = {
-                'C': trial.suggest_float('C', 1e-5, 10),
-                'epsilon': trial.suggest_float('epsilon', 1e-4, 1e-1),
-                'kernel': trial.suggest_categorical('kernel', ['linear', 'poly', 'rbf', 'sigmoid']),
-            }
-        elif model == ElasticNet:
-            params = {
-                'alpha': trial.suggest_float('alpha', 1e-3, 1e3, log=True),
+                'alpha': trial.suggest_float('alpha', 1e-5, 1e3, log=True),
                 'l1_ratio': trial.suggest_float('l1_ratio', 0.1, 1.0),
-                'max_iter': trial.suggest_int('max_iter', 1e2, 1e7, step=100),
+                'max_iter': trial.suggest_int('max_iter', 1e4, 1e7)
             }
         elif model == BayesianRidge:
             params = {
-                'alpha_1': trial.suggest_float('alpha_1', 1e-6, 1e-1, log=True),
-                'alpha_2': trial.suggest_float('alpha_2', 1e-6, 1e-1, log=True),
-                'lambda_1': trial.suggest_float('lambda_1', 1e-6, 1e-1, log=True),
-                'lambda_2': trial.suggest_float('lambda_2', 1e-6, 1e-1, log=True),
-                'max_iter': trial.suggest_int('max_iter', 1e2, 1e7, step=100),
+                'alpha_1': trial.suggest_float('alpha_1', 1e-5, 1, log=True),
+                'alpha_2': trial.suggest_float('alpha_2', 1e-5, 1, log=True),
+                'lambda_1': trial.suggest_float('lambda_1', 1e-5, 1, log=True),
+                'lambda_2': trial.suggest_float('lambda_2', 1e-5, 1, log=True),
             }
-        elif model == LinearRegression:
-            params = {}
         elif model == GradientBoostingRegressor:
             params = {
-                'max_depth': trial.suggest_int('max_depth', 3, 50),
+                'max_depth': trial.suggest_int('max_depth', 3, 20),
+                'learning_rate': trial.suggest_float('learning_rate', 1e-5, 1, log=True),
                 'min_samples_split': trial.suggest_int('min_samples_split', 3, 50),
-                'learning_rate': trial.suggest_float('learning_rate', 1e-4, 1e-2),
-                'max_features': trial.suggest_int('max_features', 1, self.X_mc.shape[1]),
             }
         elif model == XGBRegressor:
             params = {
-                'n_estimators': trial.suggest_int('n_estimators', 50, 200),
-                'max_depth': trial.suggest_int('max_depth', 3, 50),
-                'learning_rate': trial.suggest_float('learning_rate', 0.01, 0.3),
-                'gamma': trial.suggest_float('gamma', 0, 5),
-                'reg_alpha': trial.suggest_float('reg_alpha', 1e-5, 10, log=True),
-                'reg_lambda': trial.suggest_float('reg_lambda', 1e-5, 10, log=True),
+                'n_estimators': trial.suggest_int('n_estimators', 100, 500),  
+                'max_depth': trial.suggest_int('max_depth', 3, 20),  
+                'learning_rate': trial.suggest_float('learning_rate', 0.01, 0.3, log=True),  
+                'reg_alpha': trial.suggest_float('reg_alpha', 1e-5, 1.0, log=True),  
+                'reg_lambda': trial.suggest_float('reg_lambda', 1e-5, 1.0, log=True),  
+                'objective': "reg:squarederror",  
+                'subsample': trial.suggest_float('subsample', 0.7, 1.0),  
+                'colsample_bytree': trial.suggest_float('colsample_bytree', 0.6, 1.0), 
+                'gamma': trial.suggest_float('gamma', 0, 5), 
+                'min_child_weight': trial.suggest_int('min_child_weight', 1, 10),  
+                'tree_method': "hist", 
+                'multi_strategy': "multi_output_tree"
             }
+
         elif model == RandomForestRegressor:
             params = {
-                'n_estimators': trial.suggest_int('n_estimators', 50, 200),
-                'max_depth': trial.suggest_int('max_depth', 3, 30),
-                'min_samples_split': trial.suggest_int('min_samples_split', 2, 20),
-                'min_samples_leaf': trial.suggest_int('min_samples_leaf', 1, 20),
-            }   
-        elif model == TabNetRegressor:
-            params = {
-                'n_d': trial.suggest_int('n_d', 8, 64),  # Feature transformer output dimension
-                'n_a': trial.suggest_int('n_a', 8, 64),  # Attention dimension
-                'n_steps': trial.suggest_int('n_steps', 3, 10),
-                'gamma': trial.suggest_float('gamma', 1.0, 2.0),
-                'lambda_sparse': trial.suggest_float('lambda_sparse', 1e-5, 1e-1),
-                'momentum': trial.suggest_float('momentum', 0.01, 0.4),
+                'n_estimators': trial.suggest_int('n_estimators', 100, 500),
+                'max_depth': trial.suggest_int('max_depth', 3, 20),
+                'min_samples_split': trial.suggest_int('min_samples_split', 2, 20)
             }
-        elif model == LGBMRegressor:
+        elif model == MLPRegressor:
             params = {
-                'n_estimators': trial.suggest_int('n_estimators', 50, 500),
-                'num_leaves': trial.suggest_int('num_leaves', 20, 300),
-                'learning_rate': trial.suggest_float('learning_rate', 1e-3, 0.3),
-                'max_depth': trial.suggest_int('max_depth', -1, 15),
+                #'hidden_layer_sizes': trial.suggest_categorical('hidden_layer_sizes',  [[50], [100], [100, 50], [150, 100]]),
+                'activation': trial.suggest_categorical('activation', ['relu', 'tanh', 'logistic']),
+                'alpha': trial.suggest_float('alpha', 1e-5, 1e-1, log=True),
+                'learning_rate_init': trial.suggest_float('learning_rate_init', 1e-4, 1e-1, log=True),
+                'max_iter': trial.suggest_int('max_iter', 1000, 1000000)
+            }
+        elif model == SVR:
+            params = {
+                'C': trial.suggest_float('C', 0.1, 1000, log=True),  
+                'epsilon': trial.suggest_float('epsilon', 0.01, 1.0), 
+                'kernel': trial.suggest_categorical('kernel', ['linear', 'poly', 'rbf', 'sigmoid']),
+                'degree': trial.suggest_int('degree', 2, 5) if trial.params.get('kernel') == 'poly' else 3, 
+                'gamma': trial.suggest_categorical('gamma', ['scale', 'auto']), 
             }
         else:
             raise ValueError(f"Model {model} not supported")
 
-        return self.fit_flow(model, params)
+        return self.fit_flow_mccv(model, params)
+    
 
-    def optimize_model(self, model, n_trials=30):
-        """
-        Optimize the model by finding the best hyperparameters using Optuna.
-
-        Parameters:
-            model (class): The regression model class to optimize.
-            n_trials (int): The number of optimization trials.
-
-        Returns:
-            model: The optimized regression model.
-        """
-        study = optuna.create_study(direction='minimize', storage="sqlite:///optuna_study.db", load_if_exists=True)
+    def optimize_model(self, model, n_trials=10):
+        # Create an Optuna study
+        study = optuna.create_study(direction='minimize')
         study.optimize(lambda trial: self.objective(trial, model), n_trials=n_trials)
 
+        # Save the study as an attribute for later use
         self.study = study
 
         print(f"Best parameters for {model.__name__}: {study.best_params}")
-        print(f"Best MSE for {model.__name__}: {study.best_value}")
+        print(f"Best MAPE for {model.__name__}: {study.best_value}")
 
-        # Build and train the best model with the best hyperparameters using K-Fold CV to prevent data leakage
+        # Get the best hyperparameters
         best_params = study.best_params
-        
-        # Train the model on the full dataset with best parameters
         if self.use_chain:
             best_model = RegressorChain(model(**best_params))
+        elif model in [XGBRegressor]:
+            best_model = MultiOutputRegressor(model(**best_params))
         else:
             best_model = MultiOutputRegressor(model(**best_params))
 
-        best_model.fit(self.X_mc, self.y_mc)
-        return best_model
 
+        if self.num_samples > 0:
+            X_train_mc, y_train_mc = generate_mc_data(
+                self.X_train, self.y_train, self.num_samples, self.noise_level_X, self.noise_level_y
+            )
+        else:
+            X_train_mc, y_train_mc = self.X_train, self.y_train
+
+        if self.use_scaling:
+            scaler = StandardScaler()
+            X_train_mc = scaler.fit_transform(X_train_mc)
+            self.X_test = scaler.transform(self.X_test)
+
+            X_train_mc = pd.DataFrame(X_train_mc, columns=self.X_train.columns)
+            self.X_test = pd.DataFrame(self.X_test, columns=self.X_train.columns)
+            
+            
+        # Train the best model on the full Monte Carlo dataset
+        pd.DataFrame(X_train_mc).to_csv('./Output/X_train_MC.csv', index=False)
+        pd.DataFrame(y_train_mc).to_csv('./Output/y_train_mc.csv', index=False)
+
+
+        best_model.fit(X_train_mc, y_train_mc)
+
+        return best_model

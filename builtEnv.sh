@@ -22,7 +22,7 @@ pip install --upgrade pip
 ############## Install required packages ##############
 echo "Installing required packages..."
 pip install numpy matplotlib scipy pandas psutil scikit-learn\
- ipykernel tqdm seaborn shap xgboost optuna plotly kaleido pytorch-tabnet lightgbm
+ ipykernel tqdm seaborn shap xgboost optuna plotly kaleido pytorch-tabnet lightgbm catboost
 
 ############## Check Python and pip versions ##############
 # echo "Checking installation..."
