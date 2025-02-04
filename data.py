@@ -1,5 +1,6 @@
 import pandas as pd
 import os
+import numpy as np
 
 def process_data(file_path):
     """
@@ -22,19 +23,10 @@ def process_data(file_path):
     # Extract features
     X = df[features].copy()
 
-    # # Create interaction terms
-    # X['Sintering_temperature_&_Heating_rate'] = (
-    #     X['Sintering_temperature'] * X['Heating_rate']
-    # )
-    X['Sintering_temperature_&_Sintering_time'] = (
-        X['Sintering_temperature'] * X['Sintering_time']
-    )
-    # X['Heating_rate_&_Sintering_time'] = (
-    #     X['Heating_rate'] * X['Sintering_time']
-    # )
-    # X['Thermal_Impact_Rate'] = (
-    #         X['Sintering_temperature'] / (X['Sintering_time'] + 1e-6)  # Avoid division by zero
-    #     )
+    # Create interaction terms
+    X['Sintering_temperature_&_Sintering_time'] = X['Sintering_temperature'] * X['Sintering_time']
+
+
 
     # Extract target variables
     y = df[targets]
@@ -43,7 +35,7 @@ def process_data(file_path):
 
 def generate_mc_data(X, y, num_samples, noise_level_X, noise_level_y, random_state=42):
     """
-    Generate Monte Carlo (MC) data with controlled noise.
+    Generate Monte Carlo (MC) data with controlled noise and include the original data.
 
     Parameters:
         X (pd.DataFrame): Original input data (features).
@@ -54,11 +46,9 @@ def generate_mc_data(X, y, num_samples, noise_level_X, noise_level_y, random_sta
         random_state (int): Seed for reproducibility.
 
     Returns:
-        X_mc (pd.DataFrame): Augmented input data.
-        y_mc (pd.DataFrame): Augmented output data.
+        X_mc (pd.DataFrame): Augmented input data, including original data.
+        y_mc (pd.DataFrame): Augmented output data, including original data.
     """
-    import numpy as np
-    
     rng = np.random.default_rng(random_state)
     X_mc, y_mc = [], []
 
@@ -72,15 +62,7 @@ def generate_mc_data(X, y, num_samples, noise_level_X, noise_level_y, random_sta
                 a_max=None
             )
 
-        # X_noisy['Sintering_temperature_&_Heating_rate'] = (
-        #     X_noisy['Sintering_temperature'] * X_noisy['Heating_rate']
-        # )
-        X_noisy['Sintering_temperature_&_Sintering_time'] = (
-            X_noisy['Sintering_temperature'] * X_noisy['Sintering_time']
-        )
-        # X_noisy['Thermal_Impact_Rate'] = (
-        #             X_noisy['Sintering_temperature'] / (X_noisy['Sintering_time'] + 1e-6)  # Avoid division by zero
-        #         )
+        X_noisy['Sintering_temperature_&_Sintering_time'] = X_noisy['Sintering_temperature'] * X_noisy['Sintering_time']
 
         # Add noise to output targets
         y_noisy = y.copy()
@@ -95,5 +77,8 @@ def generate_mc_data(X, y, num_samples, noise_level_X, noise_level_y, random_sta
         X_mc.append(X_noisy)
         y_mc.append(y_noisy)
 
-    # Concatenate all generated samples
-    return pd.concat(X_mc, ignore_index=True), pd.concat(y_mc, ignore_index=True)
+    # Concatenate all generated samples and include the original data
+    X_mc = pd.concat(X_mc + [X], ignore_index=True)
+    y_mc = pd.concat(y_mc + [y], ignore_index=True)
+
+    return X_mc, y_mc

@@ -41,19 +41,19 @@ def parse_args():
     )
 
     parser.add_argument(
-        '--num-samples', type=int, default=100, help="Number of Monte Carlo samples (default: 100)"
+        '--num-sim', type=int, default=100, help="Number of Monte Carlo samples (default: 100)"
     )
     parser.add_argument(
-        '--noise-level-X', type=float, default=0.05, help="Noise level for input features in Monte Carlo simulations (default: 0.05)"
+        '--noise-level-X', type=float, default=0.01, help="Noise level for input features in Monte Carlo simulations (default: 0.01)"
     )
     parser.add_argument(
-        '--noise-level-y', type=float, default=0.05, help="Noise level for output targets in Monte Carlo simulations (default: 0.05)"
+        '--noise-level-y', type=float, default=0.01, help="Noise level for output targets in Monte Carlo simulations (default: 0.01)"
     )
     parser.add_argument(
-        '--num_trials', type=int, default=10, help="Number of trials when using Optuna (default: 10)"
+        '--num-trials', type=int, default=10, help="Number of trials when using Optuna (default: 10)"
     )
     parser.add_argument(
-        '--num_iterations', type=int, default=100, help="Number of trials when using Optuna (default: 10)"
+        '--num-iter', type=int, default=100, help="Number of trials when using Optuna (default: 10)"
     )
     return parser.parse_args()
 
@@ -66,11 +66,6 @@ def main():
 
     print("Loading data...")
     X, y = process_data(args.file_path)
-
-    if X is None or y is None or len(X) == 0 or len(y) == 0:
-        print("Error: Input data is empty or invalid. Exiting.")
-        return
-
 
     model_map = {
         'ElasticNet': ElasticNet,
@@ -93,15 +88,13 @@ def main():
             if model_name in model_map:
                 model_class = model_map[model_name]
                 use_scaling = model_name not in ['RandomForestRegressor']
-                use_chain = False
 
                 try:
                     tuner = ModelOptimizer(
                         X, y,
                         use_scaling=use_scaling,
-                        use_chain=use_chain,
-                        num_iterations=args.num_iterations,
-                        num_samples=args.num_samples,
+                        num_sim=args.num_sim,
+                        num_iterations=args.num_iter,
                         noise_level_X=args.noise_level_X,
                         noise_level_y=args.noise_level_y
                     )
@@ -119,7 +112,6 @@ def main():
 
                 results.append({
                     'Model': model_class.__name__,
-                    'Use Chain': 'Yes' if use_chain else 'No',
                     'R2 Score': r2,
                     'MSE': mse,
                     'MAE': mae,
@@ -130,37 +122,38 @@ def main():
 
                 tuner.X_test = pd.DataFrame(tuner.X_test, columns=X.columns)
                 
-                try: 
+                try:
                     # Visualize
                     shap_bar_plot(
                         optimized_model,
                         tuner.X_test,
                         feature_names=tuner.X_test.columns.tolist(),
-                        save_path=f"Figs/SHAP_{model_class.__name__}_{use_chain}.png"
+                        save_path=f"Figs/SHAP_{model_class.__name__}.png"
                     )
                     shap_summary_plot(
                         optimized_model,
                         tuner.X_test,
                         feature_names=tuner.X_test.columns.tolist(),
-                        save_path=f"Figs/SHAPsum_{model_class.__name__}_{use_chain}.png"
+                        save_path=f"Figs/SHAPsum_{model_class.__name__}.png"
                     )
                     plot_predictions(
                         optimized_model,
                         tuner.X_test, tuner.y_test,
                         num_outputs=tuner.y_test.shape[1],
-                        save_path=f"Figs/Prediction_{model_class.__name__}_{use_chain}.png"
+                        save_path=f"Figs/Prediction_{model_class.__name__}.png"
                     )
                     plot_permutation_importance(
                         optimized_model,
                         tuner.X_test, tuner.y_test,
-                        save_path=f"Figs/PI_{model_class.__name__}_{use_chain}.png"
+                        save_path=f"Figs/PI_{model_class.__name__}.png"
                     )
                     fig_opt_history = plot_optimization_history(tuner.study)
-                    fig_opt_history.write_image(f"Figs/OptHistory_{model_class.__name__}_{use_chain}.png")
+                    fig_opt_history.write_image(f"Figs/OptHistory_{model_class.__name__}.png")
                     fig_param_importance = plot_param_importances(tuner.study)
-                    fig_param_importance.write_image(f"Figs/ParamImportance_{model_class.__name__}_{use_chain}.png")
+                    fig_param_importance.write_image(f"Figs/ParamImportance_{model_class.__name__}.png")
                 except Exception as e:
-                    print(f"Skipping visualization for {model_class.__name__}: {e}")
+                    print(f"Error during plotting for {model_class.__name__}: {e}")
+                    continue
 
     if results:
         results_df = pd.DataFrame(results)

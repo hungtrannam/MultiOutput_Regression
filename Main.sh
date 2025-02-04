@@ -1,19 +1,14 @@
 #!/bin/bash
 set -e  # Exit on error
 set -x  # Print commands before running
-# Define variables
-#
-# "ElasticNet" "BayesianRidge" "GradientBoostingRegressor" RandomForestRegressor
-# XGBRegressor 'LGBMRegressor'
 
+# "SVR" "MLPRegressor" "BayesianRidge" "ElasticNet" "RandomForestRegressor" "GradientBoostingRegressor" "XGBRegressor"
 
-
-# ElasticNet BayesianRidge  RandomForestRegressor  XGBRegressor  LGBMRegressor CatBoostRegressor
 FILE_PATH="ex.txt" 
-MODELS=("SVR" "MLPRegressor" "BayesianRidge" "ElasticNet" "RandomForestRegressor" "GradientBoostingRegressor" "XGBRegressor")
+MODELS=("XGBRegressor")
 NOISE_LEVEL=0.01
-NUM_SAMPLE=20
-num_iterations=100
+NUM_SIM=20
+NUM_MCCV=100
 NUM_TRIALS=50
 
 # Run Python script for all models
@@ -21,9 +16,9 @@ echo "Running model comparison..."
 python exp_main.py \
   --file-path "$FILE_PATH" \
   --models "${MODELS[@]}" \
-  --num-samples "$NUM_SAMPLE" \
-  --num_iterations "$num_iterations"\
-  --num_trials "$NUM_TRIALS"\
+  --num-sim "$NUM_SIM" \
+  --num-iter "$NUM_MCCV"\
+  --num-trials "$NUM_TRIALS"\
   --noise-level-X "$NOISE_LEVEL" \
   --noise-level-y "$NOISE_LEVEL" > output.log 2>&1
 echo "Done. Check output.log for details."
